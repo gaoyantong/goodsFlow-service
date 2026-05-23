@@ -24,6 +24,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -52,7 +55,7 @@ public class FlowGenerationService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public ResData<FlowTask> createAndGenerate(FlowTaskModifyParams params) {
+    public synchronized ResData<FlowTask> createAndGenerate(FlowTaskModifyParams params) {
         if (params.getDeliveryStartDate().isAfter(params.getDeliveryEndDate())) {
             return ResData.fail("配送开始日期不能晚于配送截止日期");
         }
@@ -69,7 +72,7 @@ public class FlowGenerationService {
         }
 
         FlowTask task = new FlowTask();
-        task.setTaskNo("FL" + System.currentTimeMillis());
+        task.setTaskNo(nextTaskNo());
         task.setGoodsId(params.getGoodsId());
         task.setPendingDeliveryQty(params.getPendingDeliveryQty());
         task.setDeliveryStartDate(params.getDeliveryStartDate());
@@ -93,7 +96,12 @@ public class FlowGenerationService {
         }
         flowTaskStoreService.saveBatch(taskStores);
 
-        List<Integer> deliveryQuantities = distribute(params.getPendingDeliveryQty(), stores.size(), null);
+        List<Integer> deliveryQuantities = distributeAroundAverage(params.getPendingDeliveryQty(), stores.size());
+        List<LocalDate> deliveryDates = distributeDatesAroundAverage(
+            stores.size(),
+            params.getDeliveryStartDate(),
+            params.getDeliveryEndDate()
+        );
         List<DeliveryInbound> inboundList = new ArrayList<>();
         for (int i = 0; i < stores.size(); i++) {
             int inboundQty = deliveryQuantities.get(i);
@@ -103,7 +111,7 @@ public class FlowGenerationService {
             Store store = stores.get(i);
             DeliveryInbound inbound = new DeliveryInbound();
             inbound.setTaskId(task.getId());
-            inbound.setBusinessDate(randomDate(params.getDeliveryStartDate(), params.getDeliveryEndDate()));
+            inbound.setBusinessDate(deliveryDates.get(i));
             inbound.setStoreId(store.getStoreId());
             inbound.setStoreName(store.getStoreName());
             inbound.setGoodsId(goods.getGoodsId());
@@ -120,7 +128,7 @@ public class FlowGenerationService {
 
         List<RetailOutbound> retailList = new ArrayList<>();
         for (DeliveryInbound inbound : inboundList) {
-            List<Integer> dailyQuantities = distribute(inbound.getInboundQty(), params.getRetailDays(), null);
+            List<Integer> dailyQuantities = distributeAroundAverage(inbound.getInboundQty(), params.getRetailDays());
             for (int dayIndex = 0; dayIndex < dailyQuantities.size(); dayIndex++) {
                 int remainingDailyQty = dailyQuantities.get(dayIndex);
                 LocalDate businessDate = inbound.getBusinessDate().plusDays(dayIndex);
@@ -135,6 +143,25 @@ public class FlowGenerationService {
             retailOutboundService.saveBatch(retailList);
         }
         return ResData.success(task);
+    }
+
+    private String nextTaskNo() {
+        FlowTask latestTask = flowTaskService.getOne(Wrappers.<FlowTask>lambdaQuery()
+            .likeRight(FlowTask::getTaskNo, "FL")
+            .orderByDesc(FlowTask::getTaskNo)
+            .last("limit 1"));
+        int latestNo = Optional.ofNullable(latestTask)
+            .map(FlowTask::getTaskNo)
+            .map(this::parseTaskNo)
+            .orElse(0);
+        return String.format("FL%06d", latestNo + 1);
+    }
+
+    private int parseTaskNo(String taskNo) {
+        if (taskNo == null || !taskNo.matches("^FL\\d{6}$")) {
+            return 0;
+        }
+        return Integer.parseInt(taskNo.substring(2));
     }
 
     private List<Store> loadStores(List<String> storeIds) {
@@ -166,43 +193,46 @@ public class FlowGenerationService {
         return retail;
     }
 
-    private List<Integer> distribute(int total, int buckets, Integer maxPerBucket) {
+    private List<Integer> distributeAroundAverage(int total, int buckets) {
         if (buckets <= 0) {
             return Collections.emptyList();
         }
-        List<Integer> result = new ArrayList<>();
-        int remaining = total;
-        for (int i = 0; i < buckets; i++) {
-            int leftBuckets = buckets - i;
-            if (leftBuckets == 1) {
-                result.add(remaining);
-                break;
+        int base = total / buckets;
+        int remainder = total % buckets;
+        List<Integer> result = IntStream.range(0, buckets)
+            .mapToObj(index -> base + (index < remainder ? 1 : 0))
+            .collect(Collectors.toList());
+        Collections.shuffle(result);
+
+        int average = Math.max(1, (int) Math.round(total * 1.0 / buckets));
+        int lower = total >= buckets ? Math.max(1, (int) Math.floor(average * 0.85)) : 0;
+        int upper = Math.max(lower, (int) Math.ceil(average * 1.15));
+        int turns = Math.max(1, buckets / 2);
+        for (int i = 0; i < turns; i++) {
+            int from = ThreadLocalRandom.current().nextInt(buckets);
+            int to = ThreadLocalRandom.current().nextInt(buckets);
+            if (from == to || result.get(from) <= lower || result.get(to) >= upper) {
+                continue;
             }
-            int average = Math.max(0, remaining / leftBuckets);
-            int min = remaining >= leftBuckets ? Math.max(1, (int) Math.floor(average * 0.65)) : 0;
-            int max = Math.max(min, (int) Math.ceil(Math.max(1, average) * 1.35));
-            max = Math.min(max, remaining);
-            if (maxPerBucket != null) {
-                max = Math.min(max, maxPerBucket);
-            }
-            int value = max <= min ? min : ThreadLocalRandom.current().nextInt(min, max + 1);
-            int minForRest = remaining - value >= leftBuckets - 1 ? value : Math.max(0, remaining - (leftBuckets - 1));
-            if (remaining - value < 0) {
-                value = remaining;
-            } else if (minForRest != value && minForRest < value) {
-                value = minForRest;
-            }
-            result.add(value);
-            remaining -= value;
+            result.set(from, result.get(from) - 1);
+            result.set(to, result.get(to) + 1);
         }
         return result;
     }
 
-    private LocalDate randomDate(LocalDate start, LocalDate end) {
-        long days = ChronoUnit.DAYS.between(start, end);
-        if (days <= 0) {
-            return start;
+    private List<LocalDate> distributeDatesAroundAverage(int total, LocalDate start, LocalDate end) {
+        long days = ChronoUnit.DAYS.between(start, end) + 1;
+        if (days <= 1) {
+            return IntStream.range(0, total).mapToObj(index -> start).collect(Collectors.toList());
         }
-        return start.plusDays(ThreadLocalRandom.current().nextLong(days + 1));
+        List<Integer> dateCounts = distributeAroundAverage(total, (int) days);
+        List<LocalDate> dates = new ArrayList<>();
+        for (int i = 0; i < dateCounts.size(); i++) {
+            for (int count = 0; count < dateCounts.get(i); count++) {
+                dates.add(start.plusDays(i));
+            }
+        }
+        Collections.shuffle(dates);
+        return dates;
     }
 }

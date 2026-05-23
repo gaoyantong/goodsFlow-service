@@ -86,8 +86,8 @@ CREATE TABLE IF NOT EXISTS `gf_retail_outbound` (
 
 INSERT IGNORE INTO `sys_resource` (`id`, `name`, `nameCh`, `icon`, `path`, `parentId`, `type`, `description`, `deleted`, `createdAt`, `updatedAt`, `sortedNum`) VALUES
     (10920, 'Flow', '数据处理', 'PartitionOutlined', '/flow', NULL, 'MENU', 'Flow data processing', b'0', UNIX_TIMESTAMP() * 1000, UNIX_TIMESTAMP() * 1000, 3),
-    (10921, 'FlowTask', '数据录入', NULL, '/flow/task', '10920', 'MENU', 'Flow task input', b'0', UNIX_TIMESTAMP() * 1000, UNIX_TIMESTAMP() * 1000, 1),
-    (10922, 'DeliveryInbound', '配送入库数据', NULL, '/flow/inbound', '10920', 'MENU', 'Delivery inbound data', b'0', UNIX_TIMESTAMP() * 1000, UNIX_TIMESTAMP() * 1000, 2),
+(10921, 'FlowTask', '药品录入', NULL, '/flow/task', '10920', 'MENU', 'Medicine input', b'0', UNIX_TIMESTAMP() * 1000, UNIX_TIMESTAMP() * 1000, 1),
+(10922, 'DeliveryInbound', '入库数据', NULL, '/flow/inbound', '10920', 'MENU', 'Inbound data', b'0', UNIX_TIMESTAMP() * 1000, UNIX_TIMESTAMP() * 1000, 2),
     (10923, 'RetailOutbound', '零售数据', NULL, '/flow/retail', '10920', 'MENU', 'Retail outbound data', b'0', UNIX_TIMESTAMP() * 1000, UNIX_TIMESTAMP() * 1000, 3);
 
 INSERT IGNORE INTO `sys_role_resource` (`id`, `roleId`, `resourceId`, `deleted`, `createdAt`, `updatedAt`, `sortedNum`) VALUES

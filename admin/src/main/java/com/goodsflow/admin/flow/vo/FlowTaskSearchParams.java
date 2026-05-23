@@ -7,6 +7,7 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class FlowTaskSearchParams extends PageParams {
+    private String taskNo;
     private String goodsId;
     private String batchNo;
     private String status;

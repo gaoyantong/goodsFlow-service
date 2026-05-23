@@ -49,6 +49,7 @@ public class FlowTaskController {
     public ResData<List<FlowTask>> list(@RequestBody FlowTaskSearchParams params) {
         LambdaQueryWrapper<FlowTask> wrapper = Wrappers.lambdaQuery();
         wrapper.eq(FlowTask::getDeleted, false)
+            .like(StringUtils.hasText(params.getTaskNo()), FlowTask::getTaskNo, params.getTaskNo())
             .like(StringUtils.hasText(params.getGoodsId()), FlowTask::getGoodsId, params.getGoodsId())
             .like(StringUtils.hasText(params.getBatchNo()), FlowTask::getBatchNo, params.getBatchNo())
             .eq(StringUtils.hasText(params.getStatus()), FlowTask::getStatus, params.getStatus())
