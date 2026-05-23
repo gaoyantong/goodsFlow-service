@@ -1,0 +1,4 @@
+rootProject.name = 'goodsFlow-service'
+include 'common'
+include 'dao'
+include 'admin'

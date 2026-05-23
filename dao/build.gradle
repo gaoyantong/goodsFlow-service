@@ -1,0 +1,13 @@
+dependencies {
+    api project(':common')
+    api 'com.baomidou:mybatis-plus-boot-starter:3.4.2'
+    implementation 'mysql:mysql-connector-java:8.0.32'
+}
+
+bootJar {
+    enabled = false
+}
+
+jar {
+    enabled = true
+}
