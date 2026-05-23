@@ -11,9 +11,11 @@ import javax.validation.constraints.NotBlank;
 @EqualsAndHashCode(callSuper = true)
 @TableName("sys_role")
 public class Role extends BaseEntity {
+    /** 角色名称 */
     @NotBlank(message = "name is required")
     private String name;
 
+    /** 角色编码 */
     @NotBlank(message = "roleCode is required")
     private String roleCode;
 }

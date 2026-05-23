@@ -1,0 +1,66 @@
+package com.goodsflow.dao.flow.entity;
+
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.goodsflow.dao.BaseEntity;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import java.time.LocalDate;
+
+@Data
+@EqualsAndHashCode(callSuper = true)
+@TableName("gf_flow_task")
+public class FlowTask extends BaseEntity {
+    /** 任务编号 */
+    private String taskNo;
+
+    /** 货品ID，关联货品资料 */
+    @NotBlank(message = "goodsId is required")
+    private String goodsId;
+
+    /** 待配送数量 */
+    @NotNull(message = "pendingDeliveryQty is required")
+    @Min(value = 1, message = "pendingDeliveryQty must be greater than 0")
+    private Integer pendingDeliveryQty;
+
+    /** 配送开始日期 */
+    @NotNull(message = "deliveryStartDate is required")
+    private LocalDate deliveryStartDate;
+
+    /** 配送截止日期 */
+    @NotNull(message = "deliveryEndDate is required")
+    private LocalDate deliveryEndDate;
+
+    /** 单笔零售最大数量 */
+    @NotNull(message = "maxRetailQtyPerOrder is required")
+    @Min(value = 1, message = "maxRetailQtyPerOrder must be greater than 0")
+    private Integer maxRetailQtyPerOrder;
+
+    /** 生成零售天数 */
+    @NotNull(message = "retailDays is required")
+    @Min(value = 1, message = "retailDays must be greater than 0")
+    private Integer retailDays;
+
+    /** 批号 */
+    @NotBlank(message = "batchNo is required")
+    private String batchNo;
+
+    /** 有效期 */
+    @NotNull(message = "expiryDate is required")
+    private LocalDate expiryDate;
+
+    /** 门店范围类型，ALL=全部门店，SELECTED=指定门店 */
+    private String storeScopeType;
+
+    /** 任务状态，PENDING=待处理，GENERATED=已生成 */
+    private String status;
+
+    /** 生成时间，毫秒时间戳 */
+    private Long generatedAt;
+
+    /** 备注 */
+    private String remark;
+}

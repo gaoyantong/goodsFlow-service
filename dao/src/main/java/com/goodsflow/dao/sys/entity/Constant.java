@@ -9,9 +9,18 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 @TableName("sys_constant")
 public class Constant extends BaseEntity {
+    /** 常量编码 */
     private String code;
+
+    /** 常量名称 */
     private String name;
+
+    /** 父级编码 */
     private String parent;
+
+    /** 常量值 */
     private String vals;
+
+    /** 备注 */
     private String remarks;
 }

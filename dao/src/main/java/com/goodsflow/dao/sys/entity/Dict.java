@@ -9,11 +9,24 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 @TableName("sys_dict")
 public class Dict extends BaseEntity {
+    /** 字典编码 */
     private String code;
+
+    /** 英文名称 */
     private String nameEnus;
+
+    /** 简体中文名称 */
     private String nameZhcn;
+
+    /** 繁体中文名称 */
     private String nameZhtw;
+
+    /** 父级编码 */
     private String parent;
+
+    /** 字典值 */
     private String vals;
+
+    /** 备注 */
     private String remarks;
 }

@@ -1,15 +1,15 @@
-package com.goodsflow.admin.base.vo;
+package com.goodsflow.admin.flow.vo;
 
 import com.goodsflow.dao.PageParams;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-import java.util.List;
-
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class StoreSearchParams extends PageParams {
+public class InboundSearchParams extends PageParams {
+    private String taskId;
     private String storeId;
     private String storeName;
-    private List<String> ids;
+    private String goodsId;
+    private String batchNo;
 }

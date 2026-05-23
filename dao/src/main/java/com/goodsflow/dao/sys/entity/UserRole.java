@@ -9,6 +9,9 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 @TableName("sys_user_role")
 public class UserRole extends BaseEntity {
+    /** 角色ID */
     private String roleId;
+
+    /** 用户ID */
     private String userId;
 }
