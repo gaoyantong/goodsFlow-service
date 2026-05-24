@@ -8,6 +8,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class HealthController {
     @GetMapping("/health")
     public ResData<String> health() {
-        return ResData.success("goodsFlow admin service is running");
+        return ResData.success("GoodsFlow后台服务运行中");
     }
 }

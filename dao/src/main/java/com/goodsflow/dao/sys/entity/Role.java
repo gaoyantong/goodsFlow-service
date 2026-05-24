@@ -12,10 +12,10 @@ import javax.validation.constraints.NotBlank;
 @TableName("sys_role")
 public class Role extends BaseEntity {
     /** 角色名称 */
-    @NotBlank(message = "name is required")
+    @NotBlank(message = "请输入角色名称")
     private String name;
 
     /** 角色编码 */
-    @NotBlank(message = "roleCode is required")
+    @NotBlank(message = "请输入角色编码")
     private String roleCode;
 }

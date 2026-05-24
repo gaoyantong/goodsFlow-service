@@ -36,30 +36,33 @@ public class ConstantController {
     @PostMapping("modify")
     public ResData<Void> modify(@Validated @RequestBody Constant constant) {
         Constant existing = constantService.getOne(Wrappers.<Constant>lambdaQuery()
-            .eq(Constant::getDeleted, false)
             .eq(Constant::getCode, constant.getCode())
             .last("limit 1"));
-        if (existing != null && !Objects.equals(existing.getId(), constant.getId())) {
-            return ResData.fail("constant code already exists");
+        if (existing != null && !Boolean.TRUE.equals(existing.getDeleted()) && !Objects.equals(existing.getId(), constant.getId())) {
+            return ResData.fail("常量编码已存在");
         }
-        return constantService.saveOrUpdate(constant) ? ResData.success() : ResData.fail("save failed");
+        if (existing != null && Boolean.TRUE.equals(existing.getDeleted()) && !StringUtils.hasText(constant.getId())) {
+            constant.setId(existing.getId());
+            constant.setDeleted(false);
+        }
+        return constantService.saveOrUpdate(constant) ? ResData.success() : ResData.fail("保存失败");
     }
 
     @PostMapping("delete")
     public ResData<Void> delete(@RequestBody Constant constant) {
         Constant target = constant.getId() == null ? null : constantService.getById(constant.getId());
         if (target == null) {
-            return ResData.fail("constant not found");
+            return ResData.fail("常量不存在");
         }
         long childCount = constantService.count(Wrappers.<Constant>lambdaQuery()
             .eq(Constant::getDeleted, false)
             .eq(Constant::getParent, target.getCode()));
         if (childCount > 0) {
-            return ResData.fail("delete child constants first");
+            return ResData.fail("请先删除子常量");
         }
         return constantService.update(Wrappers.<Constant>lambdaUpdate()
             .eq(Constant::getId, target.getId())
-            .set(Constant::getDeleted, true)) ? ResData.success() : ResData.fail("delete failed");
+            .set(Constant::getDeleted, true)) ? ResData.success() : ResData.fail("删除失败");
     }
 
     @GetMapping("info")

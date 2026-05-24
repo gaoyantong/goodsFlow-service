@@ -69,20 +69,33 @@ public class FlowTaskController {
     @PostMapping("delete")
     public ResData<Void> delete(@RequestBody FlowTask task) {
         if (task.getId() == null) {
-            return ResData.fail("id is required");
+            return ResData.fail("请选择要删除的数据");
         }
+        deleteByIds(List.of(task.getId()));
+        return ResData.success();
+    }
+
+    @PostMapping("deleteBatch")
+    public ResData<Void> deleteBatch(@RequestBody List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ResData.fail("请先勾选要删除的数据");
+        }
+        deleteByIds(ids);
+        return ResData.success();
+    }
+
+    private void deleteByIds(List<String> ids) {
         flowTaskService.update(Wrappers.<FlowTask>lambdaUpdate()
-            .eq(FlowTask::getId, task.getId())
+            .in(FlowTask::getId, ids)
             .set(FlowTask::getDeleted, true));
         deliveryInboundService.update(Wrappers.<DeliveryInbound>lambdaUpdate()
-            .eq(DeliveryInbound::getTaskId, task.getId())
+            .in(DeliveryInbound::getTaskId, ids)
             .set(DeliveryInbound::getDeleted, true));
         retailOutboundService.update(Wrappers.<RetailOutbound>lambdaUpdate()
-            .eq(RetailOutbound::getTaskId, task.getId())
+            .in(RetailOutbound::getTaskId, ids)
             .set(RetailOutbound::getDeleted, true));
         flowTaskStoreService.remove(Wrappers.<FlowTaskStore>lambdaQuery()
-            .eq(FlowTaskStore::getTaskId, task.getId()));
-        return ResData.success();
+            .in(FlowTaskStore::getTaskId, ids));
     }
 
     @GetMapping("stores")

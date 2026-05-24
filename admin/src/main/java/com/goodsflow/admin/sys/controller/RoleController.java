@@ -59,28 +59,31 @@ public class RoleController {
     @PostMapping("modify")
     public ResData<Void> modify(@Validated @RequestBody Role role) {
         Role existing = roleService.getOne(Wrappers.<Role>lambdaQuery()
-            .eq(Role::getDeleted, false)
             .eq(Role::getRoleCode, role.getRoleCode())
             .last("limit 1"));
-        if (existing != null && !Objects.equals(existing.getId(), role.getId())) {
-            return ResData.fail("role code already exists");
+        if (existing != null && !Boolean.TRUE.equals(existing.getDeleted()) && !Objects.equals(existing.getId(), role.getId())) {
+            return ResData.fail("角色编码已存在");
         }
-        return roleService.saveOrUpdate(role) ? ResData.success() : ResData.fail("save failed");
+        if (existing != null && Boolean.TRUE.equals(existing.getDeleted()) && !StringUtils.hasText(role.getId())) {
+            role.setId(existing.getId());
+            role.setDeleted(false);
+        }
+        return roleService.saveOrUpdate(role) ? ResData.success() : ResData.fail("保存失败");
     }
 
     @PostMapping("delete")
     public ResData<Void> delete(@RequestBody Role role) {
         if (role.getId() == null) {
-            return ResData.fail("role id is required");
+            return ResData.fail("请选择要删除的角色");
         }
         if (userRoleService.count(Wrappers.<UserRole>lambdaQuery()
             .eq(UserRole::getDeleted, false)
             .eq(UserRole::getRoleId, role.getId())) > 0) {
-            return ResData.fail("role is assigned to users");
+            return ResData.fail("该角色已分配给用户，不能删除");
         }
         return roleService.update(Wrappers.<Role>lambdaUpdate()
             .eq(Role::getId, role.getId())
-            .set(Role::getDeleted, true)) ? ResData.success() : ResData.fail("delete failed");
+            .set(Role::getDeleted, true)) ? ResData.success() : ResData.fail("删除失败");
     }
 
     @GetMapping("info")
@@ -129,7 +132,7 @@ public class RoleController {
     @PostMapping("allocate")
     public ResData<Void> allocate(@RequestBody RoleResources params) {
         if (!StringUtils.hasText(params.getRoleId())) {
-            return ResData.fail("role id is required");
+            return ResData.fail("请选择角色");
         }
         roleResourceService.remove(Wrappers.<RoleResource>lambdaQuery().eq(RoleResource::getRoleId, params.getRoleId()));
         List<String> resourceIds = params.getResourcesId() == null ? Collections.emptyList() : params.getResourcesId();
@@ -139,6 +142,6 @@ public class RoleController {
             relation.setResourceId(resourceId);
             return relation;
         }).collect(Collectors.toList());
-        return relations.isEmpty() || roleResourceService.saveBatch(relations) ? ResData.success() : ResData.fail("allocate failed");
+        return relations.isEmpty() || roleResourceService.saveBatch(relations) ? ResData.success() : ResData.fail("分配失败");
     }
 }

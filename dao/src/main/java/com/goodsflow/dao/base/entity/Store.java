@@ -12,10 +12,10 @@ import javax.validation.constraints.NotBlank;
 @TableName("gf_store")
 public class Store extends BaseEntity {
     /** 门店ID，业务唯一编码 */
-    @NotBlank(message = "storeId is required")
+    @NotBlank(message = "请输入门店ID")
     private String storeId;
 
     /** 门店名称 */
-    @NotBlank(message = "storeName is required")
+    @NotBlank(message = "请输入门店")
     private String storeName;
 }

@@ -83,16 +83,19 @@ public class UserController {
     @PostMapping("modify")
     public ResData<Void> modify(@Validated @RequestBody UserWithRole params) {
         User existing = userService.getOne(Wrappers.<User>lambdaQuery()
-            .eq(User::getDeleted, false)
             .eq(User::getLoginName, params.getLoginName())
             .last("limit 1"));
-        if (existing != null && !Objects.equals(existing.getId(), params.getId())) {
-            return ResData.fail("login name already exists");
+        if (existing != null && !Boolean.TRUE.equals(existing.getDeleted()) && !Objects.equals(existing.getId(), params.getId())) {
+            return ResData.fail("登录账号已存在");
         }
         User target = params;
+        if (existing != null && Boolean.TRUE.equals(existing.getDeleted()) && !StringUtils.hasText(params.getId())) {
+            target.setId(existing.getId());
+            target.setDeleted(false);
+        }
         if (StringUtils.hasText(params.getPassword())) {
             if (params.getPassword().length() < 6 || params.getPassword().length() > 28) {
-                return ResData.fail("password length must be 6 to 28");
+                return ResData.fail("密码长度必须为6到28位");
             }
             target.setPassword(passwordService.encode(params.getPassword()));
         }
@@ -100,7 +103,7 @@ public class UserController {
             target.setPassword(userService.getById(params.getId()).getPassword());
         }
         if (!userService.saveOrUpdate(target)) {
-            return ResData.fail("save failed");
+            return ResData.fail("保存失败");
         }
         userRoleService.remove(Wrappers.<UserRole>lambdaQuery().eq(UserRole::getUserId, target.getId()));
         if (StringUtils.hasText(params.getRole())) {
@@ -108,7 +111,7 @@ public class UserController {
             relation.setUserId(target.getId());
             relation.setRoleId(params.getRole());
             if (!userRoleService.save(relation)) {
-                return ResData.fail("save role failed");
+                return ResData.fail("保存角色失败");
             }
         }
         return ResData.success();
@@ -117,14 +120,14 @@ public class UserController {
     @PostMapping("delete")
     public ResData<Void> delete(@RequestBody User user) {
         if (user.getId() == null) {
-            return ResData.fail("user id is required");
+            return ResData.fail("请选择要删除的用户");
         }
         userRoleService.update(Wrappers.<UserRole>lambdaUpdate()
             .eq(UserRole::getUserId, user.getId())
             .set(UserRole::getDeleted, true));
         return userService.update(Wrappers.<User>lambdaUpdate()
             .eq(User::getId, user.getId())
-            .set(User::getDeleted, true)) ? ResData.success() : ResData.fail("delete failed");
+            .set(User::getDeleted, true)) ? ResData.success() : ResData.fail("删除失败");
     }
 
     @GetMapping("info")

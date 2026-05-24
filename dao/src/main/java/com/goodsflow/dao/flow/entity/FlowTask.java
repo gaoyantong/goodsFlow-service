@@ -18,38 +18,38 @@ public class FlowTask extends BaseEntity {
     private String taskNo;
 
     /** 货品ID，关联货品资料 */
-    @NotBlank(message = "goodsId is required")
+    @NotBlank(message = "请选择货品")
     private String goodsId;
 
     /** 待配送数量 */
-    @NotNull(message = "pendingDeliveryQty is required")
-    @Min(value = 1, message = "pendingDeliveryQty must be greater than 0")
+    @NotNull(message = "请输入待配送数量")
+    @Min(value = 1, message = "待配送数量必须大于0")
     private Integer pendingDeliveryQty;
 
     /** 配送开始日期 */
-    @NotNull(message = "deliveryStartDate is required")
+    @NotNull(message = "请选择配送开始日期")
     private LocalDate deliveryStartDate;
 
     /** 配送截止日期 */
-    @NotNull(message = "deliveryEndDate is required")
+    @NotNull(message = "请选择配送截止日期")
     private LocalDate deliveryEndDate;
 
     /** 单笔零售最大数量 */
-    @NotNull(message = "maxRetailQtyPerOrder is required")
-    @Min(value = 1, message = "maxRetailQtyPerOrder must be greater than 0")
+    @NotNull(message = "请输入单笔零售最大数量")
+    @Min(value = 1, message = "单笔零售最大数量必须大于0")
     private Integer maxRetailQtyPerOrder;
 
     /** 生成零售天数 */
-    @NotNull(message = "retailDays is required")
-    @Min(value = 1, message = "retailDays must be greater than 0")
+    @NotNull(message = "请输入生成零售天数")
+    @Min(value = 1, message = "生成零售天数必须大于0")
     private Integer retailDays;
 
     /** 批号 */
-    @NotBlank(message = "batchNo is required")
+    @NotBlank(message = "请输入批号")
     private String batchNo;
 
     /** 有效期 */
-    @NotNull(message = "expiryDate is required")
+    @NotNull(message = "请选择有效期")
     private LocalDate expiryDate;
 
     /** 门店范围类型，ALL=全部门店，SELECTED=指定门店 */

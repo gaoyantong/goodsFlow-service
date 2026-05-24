@@ -50,13 +50,16 @@ public class GoodsController {
     @PostMapping("modify")
     public ResData<Void> modify(@Validated @RequestBody Goods goods) {
         Goods existing = goodsService.getOne(Wrappers.<Goods>lambdaQuery()
-            .eq(Goods::getDeleted, false)
             .eq(Goods::getGoodsId, goods.getGoodsId())
             .last("limit 1"));
-        if (existing != null && !Objects.equals(existing.getId(), goods.getId())) {
-            return ResData.fail("goodsId already exists");
+        if (existing != null && !Boolean.TRUE.equals(existing.getDeleted()) && !Objects.equals(existing.getId(), goods.getId())) {
+            return ResData.fail("货品ID已存在");
         }
-        return goodsService.saveOrUpdate(goods) ? ResData.success() : ResData.fail("save failed");
+        if (existing != null && Boolean.TRUE.equals(existing.getDeleted()) && !StringUtils.hasText(goods.getId())) {
+            goods.setId(existing.getId());
+            goods.setDeleted(false);
+        }
+        return goodsService.saveOrUpdate(goods) ? ResData.success() : ResData.fail("保存失败");
     }
 
     @PostMapping("delete")
@@ -64,7 +67,7 @@ public class GoodsController {
         boolean success = goods.getId() != null && goodsService.update(Wrappers.<Goods>lambdaUpdate()
             .eq(Goods::getId, goods.getId())
             .set(Goods::getDeleted, true));
-        return success ? ResData.success() : ResData.fail("delete failed");
+        return success ? ResData.success() : ResData.fail("删除失败");
     }
 
     @PostMapping("deleteBatch")
@@ -72,7 +75,7 @@ public class GoodsController {
         boolean success = !ids.isEmpty() && goodsService.update(Wrappers.<Goods>lambdaUpdate()
             .in(Goods::getId, ids)
             .set(Goods::getDeleted, true));
-        return success ? ResData.success() : ResData.fail("delete failed");
+        return success ? ResData.success() : ResData.fail("删除失败");
     }
 
     @GetMapping("info")
@@ -120,12 +123,13 @@ public class GoodsController {
                     return ResData.fail("第" + (i + 1) + "行存在必填项为空");
                 }
                 Goods goods = goodsService.getOne(Wrappers.<Goods>lambdaQuery()
-                    .eq(Goods::getDeleted, false)
                     .eq(Goods::getGoodsId, goodsId)
                     .last("limit 1"));
                 if (goods == null) {
                     goods = new Goods();
                     goods.setGoodsId(goodsId);
+                } else if (Boolean.TRUE.equals(goods.getDeleted())) {
+                    goods.setDeleted(false);
                 }
                 goods.setGenericName(genericName);
                 goods.setManufacturer(manufacturer);

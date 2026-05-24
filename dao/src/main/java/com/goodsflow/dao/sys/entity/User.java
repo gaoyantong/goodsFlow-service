@@ -15,7 +15,7 @@ public class User extends BaseEntity {
     private String name;
 
     /** 登录账号 */
-    @NotBlank(message = "loginName is required")
+    @NotBlank(message = "请输入登录账号")
     private String loginName;
 
     /** 登录密码 */

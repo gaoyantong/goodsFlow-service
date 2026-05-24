@@ -48,13 +48,13 @@ public class AdminController {
     }
 
     @PostMapping("login")
-    public ResData<User> login(@Validated @RequestBody LoginParams params, HttpServletRequest request) {
+    public ResData<Map<String, Object>> login(@Validated @RequestBody LoginParams params, HttpServletRequest request) {
         User user = userService.getOne(Wrappers.<User>lambdaQuery()
             .eq(User::getDeleted, false)
             .eq(User::getLoginName, params.getLoginName())
             .last("limit 1"));
         if (user == null || !passwordService.matches(params.getPassword(), user.getPassword())) {
-            return ResData.fail("login name or password is incorrect");
+            return ResData.fail("登录账号或密码错误");
         }
         if (!user.getPassword().startsWith("sha256$")) {
             userService.update(Wrappers.<User>lambdaUpdate()
@@ -63,7 +63,7 @@ public class AdminController {
         }
         HttpSession session = request.getSession(true);
         session.setAttribute(AdminSession.USER_ID, user.getId());
-        return ResData.success(withoutPassword(user));
+        return ResData.success(userInfo(user.getId()));
     }
 
     @GetMapping("info")
@@ -72,23 +72,9 @@ public class AdminController {
         User user = userService.getById(userId);
         if (user == null || Boolean.TRUE.equals(user.getDeleted())) {
             session.invalidate();
-            return ResData.fail("user not found");
+            return ResData.fail("用户不存在");
         }
-        UserRole relation = userRoleService.getOne(Wrappers.<UserRole>lambdaQuery()
-            .eq(UserRole::getDeleted, false)
-            .eq(UserRole::getUserId, userId)
-            .last("limit 1"));
-        Role role = relation == null ? null : roleService.getById(relation.getRoleId());
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("id", user.getId());
-        data.put("name", user.getName());
-        data.put("loginName", user.getLoginName());
-        data.put("workNum", user.getWorkNum());
-        data.put("email", user.getEmail());
-        data.put("description", user.getDescription());
-        data.put("roleCode", role == null ? null : role.getRoleCode());
-        data.put("roleName", role == null ? null : role.getName());
-        return ResData.success(data);
+        return ResData.success(userInfo(userId));
     }
 
     @PostMapping("logout")
@@ -153,19 +139,31 @@ public class AdminController {
         target.setLoginName(null);
         if (StringUtils.hasText(update.getPassword())) {
             if (update.getPassword().length() < 6 || update.getPassword().length() > 28) {
-                return ResData.fail("password length must be 6 to 28");
+                return ResData.fail("密码长度必须为6到28位");
             }
             target.setPassword(passwordService.encode(update.getPassword()));
         } else {
             target.setPassword(null);
         }
-        return userService.updateById(target) ? ResData.success() : ResData.fail("save failed");
+        return userService.updateById(target) ? ResData.success() : ResData.fail("保存失败");
     }
 
-    private User withoutPassword(User source) {
-        User result = new User();
-        BeanUtils.copyProperties(source, result);
-        result.setPassword(null);
-        return result;
+    private Map<String, Object> userInfo(String userId) {
+        User user = userService.getById(userId);
+        UserRole relation = userRoleService.getOne(Wrappers.<UserRole>lambdaQuery()
+            .eq(UserRole::getDeleted, false)
+            .eq(UserRole::getUserId, userId)
+            .last("limit 1"));
+        Role role = relation == null ? null : roleService.getById(relation.getRoleId());
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("id", user.getId());
+        data.put("name", user.getName());
+        data.put("loginName", user.getLoginName());
+        data.put("workNum", user.getWorkNum());
+        data.put("email", user.getEmail());
+        data.put("description", user.getDescription());
+        data.put("roleCode", role == null ? null : role.getRoleCode());
+        data.put("roleName", role == null ? null : role.getName());
+        return data;
     }
 }

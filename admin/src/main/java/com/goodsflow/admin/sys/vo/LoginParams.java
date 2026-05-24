@@ -6,9 +6,9 @@ import javax.validation.constraints.NotBlank;
 
 @Data
 public class LoginParams {
-    @NotBlank(message = "loginName is required")
+    @NotBlank(message = "请输入登录账号")
     private String loginName;
 
-    @NotBlank(message = "password is required")
+    @NotBlank(message = "请输入密码")
     private String password;
 }

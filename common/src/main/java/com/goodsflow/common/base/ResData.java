@@ -14,15 +14,15 @@ public class ResData<T> {
     private Long total;
 
     public static <T> ResData<T> success(T data) {
-        return new ResData<>(0, "success", data, null);
+        return new ResData<>(0, "成功", data, null);
     }
 
     public static <T> ResData<T> success(T data, long total) {
-        return new ResData<>(0, "success", data, total);
+        return new ResData<>(0, "成功", data, total);
     }
 
     public static ResData<Void> success() {
-        return new ResData<>(0, "success", null, null);
+        return new ResData<>(0, "成功", null, null);
     }
 
     public static <T> ResData<T> fail(String message) {

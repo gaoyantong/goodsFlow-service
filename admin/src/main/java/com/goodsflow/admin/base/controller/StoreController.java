@@ -50,13 +50,16 @@ public class StoreController {
     @PostMapping("modify")
     public ResData<Void> modify(@Validated @RequestBody Store store) {
         Store existing = storeService.getOne(Wrappers.<Store>lambdaQuery()
-            .eq(Store::getDeleted, false)
             .eq(Store::getStoreId, store.getStoreId())
             .last("limit 1"));
-        if (existing != null && !Objects.equals(existing.getId(), store.getId())) {
-            return ResData.fail("storeId already exists");
+        if (existing != null && !Boolean.TRUE.equals(existing.getDeleted()) && !Objects.equals(existing.getId(), store.getId())) {
+            return ResData.fail("门店ID已存在");
         }
-        return storeService.saveOrUpdate(store) ? ResData.success() : ResData.fail("save failed");
+        if (existing != null && Boolean.TRUE.equals(existing.getDeleted()) && !StringUtils.hasText(store.getId())) {
+            store.setId(existing.getId());
+            store.setDeleted(false);
+        }
+        return storeService.saveOrUpdate(store) ? ResData.success() : ResData.fail("保存失败");
     }
 
     @PostMapping("delete")
@@ -64,7 +67,7 @@ public class StoreController {
         boolean success = store.getId() != null && storeService.update(Wrappers.<Store>lambdaUpdate()
             .eq(Store::getId, store.getId())
             .set(Store::getDeleted, true));
-        return success ? ResData.success() : ResData.fail("delete failed");
+        return success ? ResData.success() : ResData.fail("删除失败");
     }
 
     @PostMapping("deleteBatch")
@@ -72,7 +75,7 @@ public class StoreController {
         boolean success = !ids.isEmpty() && storeService.update(Wrappers.<Store>lambdaUpdate()
             .in(Store::getId, ids)
             .set(Store::getDeleted, true));
-        return success ? ResData.success() : ResData.fail("delete failed");
+        return success ? ResData.success() : ResData.fail("删除失败");
     }
 
     @GetMapping("info")
@@ -115,12 +118,13 @@ public class StoreController {
                     return ResData.fail("第" + (i + 1) + "行存在必填项为空");
                 }
                 Store store = storeService.getOne(Wrappers.<Store>lambdaQuery()
-                    .eq(Store::getDeleted, false)
                     .eq(Store::getStoreId, storeId)
                     .last("limit 1"));
                 if (store == null) {
                     store = new Store();
                     store.setStoreId(storeId);
+                } else if (Boolean.TRUE.equals(store.getDeleted())) {
+                    store.setDeleted(false);
                 }
                 store.setStoreName(storeName);
                 storeService.saveOrUpdate(store);

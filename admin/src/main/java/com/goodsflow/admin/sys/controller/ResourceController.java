@@ -35,30 +35,33 @@ public class ResourceController {
     public ResData<Void> modify(@Validated @RequestBody Resource resource) {
         if (StringUtils.hasText(resource.getPath())) {
             Resource existing = resourceService.getOne(Wrappers.<Resource>lambdaQuery()
-                .eq(Resource::getDeleted, false)
                 .eq(Resource::getPath, resource.getPath())
                 .last("limit 1"));
-            if (existing != null && !Objects.equals(existing.getId(), resource.getId())) {
-                return ResData.fail("resource path already exists");
+            if (existing != null && !Boolean.TRUE.equals(existing.getDeleted()) && !Objects.equals(existing.getId(), resource.getId())) {
+                return ResData.fail("资源路径已存在");
+            }
+            if (existing != null && Boolean.TRUE.equals(existing.getDeleted()) && !StringUtils.hasText(resource.getId())) {
+                resource.setId(existing.getId());
+                resource.setDeleted(false);
             }
         }
-        return resourceService.saveOrUpdate(resource) ? ResData.success() : ResData.fail("save failed");
+        return resourceService.saveOrUpdate(resource) ? ResData.success() : ResData.fail("保存失败");
     }
 
     @PostMapping("delete")
     public ResData<Void> delete(@RequestBody Resource resource) {
         if (resource.getId() == null) {
-            return ResData.fail("resource id is required");
+            return ResData.fail("请选择要删除的资源");
         }
         long childCount = resourceService.count(Wrappers.<Resource>lambdaQuery()
             .eq(Resource::getDeleted, false)
             .eq(Resource::getParentId, resource.getId()));
         if (childCount > 0) {
-            return ResData.fail("delete child resources first");
+            return ResData.fail("请先删除子资源");
         }
         return resourceService.update(Wrappers.<Resource>lambdaUpdate()
             .eq(Resource::getId, resource.getId())
-            .set(Resource::getDeleted, true)) ? ResData.success() : ResData.fail("delete failed");
+            .set(Resource::getDeleted, true)) ? ResData.success() : ResData.fail("删除失败");
     }
 
     @GetMapping("info")

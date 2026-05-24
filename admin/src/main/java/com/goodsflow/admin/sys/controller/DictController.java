@@ -35,30 +35,33 @@ public class DictController {
     @PostMapping("modify")
     public ResData<Void> modify(@Validated @RequestBody Dict dict) {
         Dict existing = dictService.getOne(Wrappers.<Dict>lambdaQuery()
-            .eq(Dict::getDeleted, false)
             .eq(Dict::getCode, dict.getCode())
             .last("limit 1"));
-        if (existing != null && !Objects.equals(existing.getId(), dict.getId())) {
-            return ResData.fail("dict code already exists");
+        if (existing != null && !Boolean.TRUE.equals(existing.getDeleted()) && !Objects.equals(existing.getId(), dict.getId())) {
+            return ResData.fail("字典编码已存在");
         }
-        return dictService.saveOrUpdate(dict) ? ResData.success() : ResData.fail("save failed");
+        if (existing != null && Boolean.TRUE.equals(existing.getDeleted()) && !StringUtils.hasText(dict.getId())) {
+            dict.setId(existing.getId());
+            dict.setDeleted(false);
+        }
+        return dictService.saveOrUpdate(dict) ? ResData.success() : ResData.fail("保存失败");
     }
 
     @PostMapping("delete")
     public ResData<Void> delete(@RequestBody Dict dict) {
         Dict target = dict.getId() == null ? null : dictService.getById(dict.getId());
         if (target == null) {
-            return ResData.fail("dict not found");
+            return ResData.fail("字典不存在");
         }
         long childCount = dictService.count(Wrappers.<Dict>lambdaQuery()
             .eq(Dict::getDeleted, false)
             .eq(Dict::getParent, target.getCode()));
         if (childCount > 0) {
-            return ResData.fail("delete child dicts first");
+            return ResData.fail("请先删除子字典");
         }
         return dictService.update(Wrappers.<Dict>lambdaUpdate()
             .eq(Dict::getId, target.getId())
-            .set(Dict::getDeleted, true)) ? ResData.success() : ResData.fail("delete failed");
+            .set(Dict::getDeleted, true)) ? ResData.success() : ResData.fail("删除失败");
     }
 
     @GetMapping("info")

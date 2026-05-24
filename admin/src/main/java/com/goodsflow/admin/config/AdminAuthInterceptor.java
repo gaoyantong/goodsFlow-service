@@ -33,12 +33,12 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
         if (request.getSession(false) != null && request.getSession(false).getAttribute(AdminSession.USER_ID) != null) {
             String userId = (String) request.getSession(false).getAttribute(AdminSession.USER_ID);
             if (isSystemManagementRequest(request) && !canManageSystem(userId)) {
-                writeError(response, HttpStatus.FORBIDDEN, "system management is not allowed");
+                writeError(response, HttpStatus.FORBIDDEN, "无系统管理权限");
                 return false;
             }
             return true;
         }
-        writeError(response, HttpStatus.UNAUTHORIZED, "please login first");
+        writeError(response, HttpStatus.UNAUTHORIZED, "请先登录");
         return false;
     }
 
