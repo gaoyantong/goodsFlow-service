@@ -56,7 +56,7 @@ public class RetailOutboundController {
     @PostMapping("export")
     public void export(@RequestBody RetailSearchParams params, HttpServletResponse response) throws IOException {
         List<String> taskIds = findTaskIds(params.getTaskNo());
-        String filename = FlowExportFilenameUtils.retailFilename(params.getExportMonth());
+        String filename = FlowExportFilenameUtils.retailFilename(params.getExportMonth(), params.getBusinessDateStart(), params.getBusinessDateEnd());
         if (StringUtils.hasText(params.getTaskNo()) && taskIds.isEmpty()) {
             writeWorkbook(response, filename, Collections.emptyList(), Boolean.TRUE.equals(params.getExcludeBatchNo()));
             return;

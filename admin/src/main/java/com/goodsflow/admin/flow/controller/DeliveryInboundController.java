@@ -9,8 +9,10 @@ import com.goodsflow.admin.flow.vo.InboundSearchParams;
 import com.goodsflow.common.base.ResData;
 import com.goodsflow.dao.flow.entity.DeliveryInbound;
 import com.goodsflow.dao.flow.entity.FlowTask;
+import com.goodsflow.dao.flow.entity.RetailOutbound;
 import com.goodsflow.dao.flow.service.IDeliveryInboundService;
 import com.goodsflow.dao.flow.service.IFlowTaskService;
+import com.goodsflow.dao.flow.service.IRetailOutboundService;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -25,6 +27,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -36,10 +39,12 @@ public class DeliveryInboundController {
 
     private final IDeliveryInboundService deliveryInboundService;
     private final IFlowTaskService flowTaskService;
+    private final IRetailOutboundService retailOutboundService;
 
-    public DeliveryInboundController(IDeliveryInboundService deliveryInboundService, IFlowTaskService flowTaskService) {
+    public DeliveryInboundController(IDeliveryInboundService deliveryInboundService, IFlowTaskService flowTaskService, IRetailOutboundService retailOutboundService) {
         this.deliveryInboundService = deliveryInboundService;
         this.flowTaskService = flowTaskService;
+        this.retailOutboundService = retailOutboundService;
     }
 
     @PostMapping("list")
@@ -57,7 +62,7 @@ public class DeliveryInboundController {
     @PostMapping("export")
     public void export(@RequestBody InboundSearchParams params, HttpServletResponse response) throws IOException {
         List<String> taskIds = findTaskIds(params.getTaskNo());
-        String filename = FlowExportFilenameUtils.inboundFilename(params.getExportMonth());
+        String filename = FlowExportFilenameUtils.inboundFilename(params.getExportMonth(), params.getBusinessDateStart(), params.getBusinessDateEnd());
         if (StringUtils.hasText(params.getTaskNo()) && taskIds.isEmpty()) {
             writeWorkbook(response, filename, Collections.emptyList(), Boolean.TRUE.equals(params.getExcludeBatchNo()));
             return;
@@ -106,6 +111,7 @@ public class DeliveryInboundController {
     private void writeWorkbook(HttpServletResponse response, String filename, List<DeliveryInbound> rows, boolean excludeBatchNo) throws IOException {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", BaseDataExcelUtils.contentDisposition(filename));
+        Map<String, Integer> outboundQtyMap = buildOutboundQtyMap(rows);
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Sheet1");
             BaseDataExcelUtils.writeHeader(workbook, sheet, excludeBatchNo ? EXPORT_HEADERS_WITHOUT_BATCH_NO : EXPORT_HEADERS);
@@ -118,7 +124,7 @@ public class DeliveryInboundController {
                 row.createCell(3).setCellValue(item.getSpecification());
                 row.createCell(4).setCellValue(item.getUnit());
                 row.createCell(5).setCellValue(item.getInboundQty());
-                row.createCell(6).setCellValue(0);
+                row.createCell(6).setCellValue(outboundQtyMap.getOrDefault(item.getId(), 0));
                 if (excludeBatchNo) {
                     row.createCell(7).setCellValue(item.getStoreName());
                     row.createCell(8).setCellValue(CUSTODY_ACCOUNT);
@@ -132,6 +138,24 @@ public class DeliveryInboundController {
             }
             workbook.write(response.getOutputStream());
         }
+    }
+
+    private Map<String, Integer> buildOutboundQtyMap(List<DeliveryInbound> rows) {
+        List<String> inboundIds = rows.stream()
+            .map(DeliveryInbound::getId)
+            .filter(StringUtils::hasText)
+            .collect(Collectors.toList());
+        if (inboundIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return retailOutboundService.list(Wrappers.<RetailOutbound>lambdaQuery()
+                .eq(RetailOutbound::getDeleted, false)
+                .in(RetailOutbound::getInboundId, inboundIds))
+            .stream()
+            .collect(Collectors.groupingBy(
+                RetailOutbound::getInboundId,
+                Collectors.summingInt(item -> item.getOutboundQty() == null ? 0 : item.getOutboundQty())
+            ));
     }
 
 }
