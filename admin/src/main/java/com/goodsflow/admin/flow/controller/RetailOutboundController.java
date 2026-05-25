@@ -56,12 +56,13 @@ public class RetailOutboundController {
     @PostMapping("export")
     public void export(@RequestBody RetailSearchParams params, HttpServletResponse response) throws IOException {
         List<String> taskIds = findTaskIds(params.getTaskNo());
-        String filename = FlowExportFilenameUtils.retailFilename(params.getExportMonth(), params.getBusinessDateStart(), params.getBusinessDateEnd());
+        boolean excludeBatchNo = Boolean.TRUE.equals(params.getExcludeBatchNo());
+        String filename = FlowExportFilenameUtils.retailFilename(params.getExportMonth(), params.getBusinessDateStart(), params.getBusinessDateEnd(), excludeBatchNo);
         if (StringUtils.hasText(params.getTaskNo()) && taskIds.isEmpty()) {
-            writeWorkbook(response, filename, Collections.emptyList(), Boolean.TRUE.equals(params.getExcludeBatchNo()));
+            writeWorkbook(response, filename, Collections.emptyList(), excludeBatchNo);
             return;
         }
-        writeWorkbook(response, filename, retailOutboundService.list(buildWrapper(params, taskIds)), Boolean.TRUE.equals(params.getExcludeBatchNo()));
+        writeWorkbook(response, filename, retailOutboundService.list(buildWrapper(params, taskIds)), excludeBatchNo);
     }
 
     private LambdaQueryWrapper<RetailOutbound> buildWrapper(RetailSearchParams params, List<String> taskIds) {

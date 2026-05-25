@@ -25,9 +25,13 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
@@ -62,12 +66,19 @@ public class DeliveryInboundController {
     @PostMapping("export")
     public void export(@RequestBody InboundSearchParams params, HttpServletResponse response) throws IOException {
         List<String> taskIds = findTaskIds(params.getTaskNo());
-        String filename = FlowExportFilenameUtils.inboundFilename(params.getExportMonth(), params.getBusinessDateStart(), params.getBusinessDateEnd());
+        boolean excludeBatchNo = Boolean.TRUE.equals(params.getExcludeBatchNo());
+        String filename = FlowExportFilenameUtils.inboundFilename(params.getExportMonth(), params.getBusinessDateStart(), params.getBusinessDateEnd(), excludeBatchNo);
         if (StringUtils.hasText(params.getTaskNo()) && taskIds.isEmpty()) {
-            writeWorkbook(response, filename, Collections.emptyList(), Boolean.TRUE.equals(params.getExcludeBatchNo()));
+            writeWorkbook(response, filename, Collections.emptyList(), Collections.emptyList(), excludeBatchNo);
             return;
         }
-        writeWorkbook(response, filename, deliveryInboundService.list(buildWrapper(params, taskIds)), Boolean.TRUE.equals(params.getExcludeBatchNo()));
+        writeWorkbook(
+            response,
+            filename,
+            deliveryInboundService.list(buildWrapper(params, taskIds)),
+            retailOutboundService.list(buildRetailWrapper(params, taskIds)),
+            excludeBatchNo
+        );
     }
 
     private LambdaQueryWrapper<DeliveryInbound> buildWrapper(InboundSearchParams params, List<String> taskIds) {
@@ -96,6 +107,31 @@ public class DeliveryInboundController {
         return wrapper;
     }
 
+    private LambdaQueryWrapper<RetailOutbound> buildRetailWrapper(InboundSearchParams params, List<String> taskIds) {
+        LocalDate monthStart = null;
+        LocalDate monthEnd = null;
+        if (StringUtils.hasText(params.getExportMonth())) {
+            YearMonth month = FlowMonthUtils.parse(params.getExportMonth());
+            monthStart = month.atDay(1);
+            monthEnd = month.atEndOfMonth();
+        }
+        LambdaQueryWrapper<RetailOutbound> wrapper = Wrappers.lambdaQuery();
+        wrapper.eq(RetailOutbound::getDeleted, false)
+            .eq(StringUtils.hasText(params.getTaskId()), RetailOutbound::getTaskId, params.getTaskId())
+            .in(StringUtils.hasText(params.getTaskNo()), RetailOutbound::getTaskId, taskIds)
+            .like(StringUtils.hasText(params.getStoreId()), RetailOutbound::getStoreId, params.getStoreId())
+            .like(StringUtils.hasText(params.getStoreName()), RetailOutbound::getStoreName, params.getStoreName())
+            .like(StringUtils.hasText(params.getGoodsId()), RetailOutbound::getGoodsId, params.getGoodsId())
+            .like(StringUtils.hasText(params.getBatchNo()), RetailOutbound::getBatchNo, params.getBatchNo())
+            .ge(params.getBusinessDateStart() != null, RetailOutbound::getBusinessDate, params.getBusinessDateStart())
+            .le(params.getBusinessDateEnd() != null, RetailOutbound::getBusinessDate, params.getBusinessDateEnd())
+            .ge(monthStart != null, RetailOutbound::getBusinessDate, monthStart)
+            .le(monthEnd != null, RetailOutbound::getBusinessDate, monthEnd)
+            .orderBy(true, FlowSortUtils.isBusinessDateAsc(params), RetailOutbound::getBusinessDate)
+            .orderByAsc(RetailOutbound::getStoreId);
+        return wrapper;
+    }
+
     private List<String> findTaskIds(String taskNo) {
         if (!StringUtils.hasText(taskNo)) {
             return Collections.emptyList();
@@ -108,54 +144,113 @@ public class DeliveryInboundController {
             .collect(Collectors.toList());
     }
 
-    private void writeWorkbook(HttpServletResponse response, String filename, List<DeliveryInbound> rows, boolean excludeBatchNo) throws IOException {
+    private void writeWorkbook(HttpServletResponse response, String filename, List<DeliveryInbound> inboundRows, List<RetailOutbound> retailRows, boolean excludeBatchNo) throws IOException {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", BaseDataExcelUtils.contentDisposition(filename));
-        Map<String, Integer> outboundQtyMap = buildOutboundQtyMap(rows);
+        Map<String, DeliveryInbound> inboundMap = buildInboundMap(inboundRows, retailRows);
+        List<ExportRow> rows = buildExportRows(inboundRows, retailRows, inboundMap);
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Sheet1");
             BaseDataExcelUtils.writeHeader(workbook, sheet, excludeBatchNo ? EXPORT_HEADERS_WITHOUT_BATCH_NO : EXPORT_HEADERS);
             for (int i = 0; i < rows.size(); i++) {
-                DeliveryInbound item = rows.get(i);
+                ExportRow item = rows.get(i);
                 Row row = sheet.createRow(i + 1);
-                row.createCell(0).setCellValue(FlowDateUtils.formatSlashDate(item.getBusinessDate()));
-                row.createCell(1).setCellValue(item.getGenericName());
-                row.createCell(2).setCellValue(item.getManufacturer());
-                row.createCell(3).setCellValue(item.getSpecification());
-                row.createCell(4).setCellValue(item.getUnit());
-                row.createCell(5).setCellValue(item.getInboundQty());
-                row.createCell(6).setCellValue(outboundQtyMap.getOrDefault(item.getId(), 0));
+                row.createCell(0).setCellValue(FlowDateUtils.formatSlashDate(item.businessDate));
+                row.createCell(1).setCellValue(item.genericName);
+                row.createCell(2).setCellValue(item.manufacturer);
+                row.createCell(3).setCellValue(item.specification);
+                row.createCell(4).setCellValue(item.unit);
+                row.createCell(5).setCellValue(item.inboundQty);
+                row.createCell(6).setCellValue(item.outboundQty);
                 if (excludeBatchNo) {
-                    row.createCell(7).setCellValue(item.getStoreName());
+                    row.createCell(7).setCellValue(item.storeName);
                     row.createCell(8).setCellValue(CUSTODY_ACCOUNT);
-                    row.createCell(9).setCellValue(FlowDateUtils.formatSlashDate(item.getExpiryDate()));
+                    row.createCell(9).setCellValue(FlowDateUtils.formatSlashDate(item.expiryDate));
                 } else {
-                    row.createCell(7).setCellValue(item.getBatchNo());
-                    row.createCell(8).setCellValue(item.getStoreName());
+                    row.createCell(7).setCellValue(item.batchNo);
+                    row.createCell(8).setCellValue(item.storeName);
                     row.createCell(9).setCellValue(CUSTODY_ACCOUNT);
-                    row.createCell(10).setCellValue(FlowDateUtils.formatSlashDate(item.getExpiryDate()));
+                    row.createCell(10).setCellValue(FlowDateUtils.formatSlashDate(item.expiryDate));
                 }
             }
             workbook.write(response.getOutputStream());
         }
     }
 
-    private Map<String, Integer> buildOutboundQtyMap(List<DeliveryInbound> rows) {
-        List<String> inboundIds = rows.stream()
-            .map(DeliveryInbound::getId)
+    private List<ExportRow> buildExportRows(List<DeliveryInbound> inboundRows, List<RetailOutbound> retailRows, Map<String, DeliveryInbound> inboundMap) {
+        List<ExportRow> rows = new ArrayList<>();
+        inboundRows.forEach(item -> rows.add(ExportRow.inbound(item)));
+        retailRows.forEach(item -> rows.add(ExportRow.outbound(item, inboundMap.get(item.getInboundId()))));
+        rows.sort(Comparator
+            .comparing((ExportRow item) -> item.businessDate, Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparingInt(item -> item.inboundQty > 0 ? 0 : 1)
+            .thenComparing(item -> item.createdAt, Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparing(item -> item.storeName, Comparator.nullsLast(String::compareTo)));
+        return rows;
+    }
+
+    private Map<String, DeliveryInbound> buildInboundMap(List<DeliveryInbound> inboundRows, List<RetailOutbound> retailRows) {
+        Map<String, DeliveryInbound> inboundMap = new HashMap<>();
+        inboundRows.stream()
+            .filter(item -> StringUtils.hasText(item.getId()))
+            .forEach(item -> inboundMap.put(item.getId(), item));
+        Set<String> missingInboundIds = retailRows.stream()
+            .map(RetailOutbound::getInboundId)
             .filter(StringUtils::hasText)
-            .collect(Collectors.toList());
-        if (inboundIds.isEmpty()) {
-            return Collections.emptyMap();
+            .filter(id -> !inboundMap.containsKey(id))
+            .collect(Collectors.toSet());
+        if (!missingInboundIds.isEmpty()) {
+            deliveryInboundService.list(Wrappers.<DeliveryInbound>lambdaQuery()
+                    .in(DeliveryInbound::getId, missingInboundIds))
+                .forEach(item -> inboundMap.put(item.getId(), item));
         }
-        return retailOutboundService.list(Wrappers.<RetailOutbound>lambdaQuery()
-                .eq(RetailOutbound::getDeleted, false)
-                .in(RetailOutbound::getInboundId, inboundIds))
-            .stream()
-            .collect(Collectors.groupingBy(
-                RetailOutbound::getInboundId,
-                Collectors.summingInt(item -> item.getOutboundQty() == null ? 0 : item.getOutboundQty())
-            ));
+        return inboundMap;
+    }
+
+    private static class ExportRow {
+        private LocalDate businessDate;
+        private String genericName;
+        private String manufacturer;
+        private String specification;
+        private String unit;
+        private Integer inboundQty;
+        private Integer outboundQty;
+        private String batchNo;
+        private String storeName;
+        private LocalDate expiryDate;
+        private Long createdAt;
+
+        static ExportRow inbound(DeliveryInbound item) {
+            ExportRow row = new ExportRow();
+            row.businessDate = item.getBusinessDate();
+            row.genericName = item.getGenericName();
+            row.manufacturer = item.getManufacturer();
+            row.specification = item.getSpecification();
+            row.unit = item.getUnit();
+            row.inboundQty = item.getInboundQty() == null ? 0 : item.getInboundQty();
+            row.outboundQty = 0;
+            row.batchNo = item.getBatchNo();
+            row.storeName = item.getStoreName();
+            row.expiryDate = item.getExpiryDate();
+            row.createdAt = item.getCreatedAt();
+            return row;
+        }
+
+        static ExportRow outbound(RetailOutbound item, DeliveryInbound inbound) {
+            ExportRow row = new ExportRow();
+            row.businessDate = item.getBusinessDate();
+            row.genericName = item.getGenericName();
+            row.manufacturer = item.getManufacturer();
+            row.specification = item.getSpecification();
+            row.unit = item.getUnit();
+            row.inboundQty = 0;
+            row.outboundQty = item.getOutboundQty() == null ? 0 : item.getOutboundQty();
+            row.batchNo = item.getBatchNo();
+            row.storeName = item.getStoreName();
+            row.expiryDate = inbound == null ? null : inbound.getExpiryDate();
+            row.createdAt = item.getCreatedAt();
+            return row;
+        }
     }
 
 }

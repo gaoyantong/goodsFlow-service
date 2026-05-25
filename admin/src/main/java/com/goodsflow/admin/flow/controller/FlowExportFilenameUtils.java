@@ -11,10 +11,10 @@ final class FlowExportFilenameUtils {
     private FlowExportFilenameUtils() {
     }
 
-    static String inboundFilename(String exportMonth, LocalDate start, LocalDate end) {
+    static String inboundFilename(String exportMonth, LocalDate start, LocalDate end, boolean excludeBatchNo) {
         YearMonth month = FlowMonthUtils.parse(exportMonth);
         if (month != null) {
-            return "中国中药" + month.getMonthValue() + "月.xlsx";
+            return "中国中药" + month.getMonthValue() + "月" + batchNoSuffix(excludeBatchNo) + ".xlsx";
         }
         if (start != null && end != null) {
             return "中国中药" + start + "_" + end + ".xlsx";
@@ -22,10 +22,10 @@ final class FlowExportFilenameUtils {
         return "中国中药.xlsx";
     }
 
-    static String retailFilename(String exportMonth, LocalDate start, LocalDate end) {
+    static String retailFilename(String exportMonth, LocalDate start, LocalDate end, boolean excludeBatchNo) {
         YearMonth month = FlowMonthUtils.parse(exportMonth);
         if (month != null) {
-            return chineseMonth(month.getMonthValue()) + "月康每乐纯销流向.xlsx";
+            return chineseMonth(month.getMonthValue()) + "月康每乐纯销流向" + batchNoSuffix(excludeBatchNo) + ".xlsx";
         }
         if (start != null && end != null) {
             return start + "_" + end + "月康每乐纯销流向.xlsx";
@@ -38,5 +38,9 @@ final class FlowExportFilenameUtils {
             return String.valueOf(month);
         }
         return CHINESE_MONTHS[month - 1];
+    }
+
+    private static String batchNoSuffix(boolean excludeBatchNo) {
+        return excludeBatchNo ? "" : "-有批号";
     }
 }
