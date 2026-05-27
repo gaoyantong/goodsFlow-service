@@ -11,13 +11,16 @@ import com.goodsflow.dao.flow.entity.DeliveryInbound;
 import com.goodsflow.dao.flow.entity.FlowTask;
 import com.goodsflow.dao.flow.entity.FlowTaskStore;
 import com.goodsflow.dao.flow.entity.RetailOutbound;
+import com.goodsflow.dao.flow.entity.StoreCollectionStore;
 import com.goodsflow.dao.flow.service.IDeliveryInboundService;
 import com.goodsflow.dao.flow.service.IFlowTaskService;
 import com.goodsflow.dao.flow.service.IFlowTaskStoreService;
 import com.goodsflow.dao.flow.service.IRetailOutboundService;
+import com.goodsflow.dao.flow.service.IStoreCollectionStoreService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -31,12 +34,15 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class FlowGenerationService {
+    private static final double RANDOM_FLUCTUATION_RATE = 0.30;
+
     private final IFlowTaskService flowTaskService;
     private final IFlowTaskStoreService flowTaskStoreService;
     private final IDeliveryInboundService deliveryInboundService;
     private final IRetailOutboundService retailOutboundService;
     private final IGoodsService goodsService;
     private final IStoreService storeService;
+    private final IStoreCollectionStoreService storeCollectionStoreService;
 
     public FlowGenerationService(
         IFlowTaskService flowTaskService,
@@ -44,7 +50,8 @@ public class FlowGenerationService {
         IDeliveryInboundService deliveryInboundService,
         IRetailOutboundService retailOutboundService,
         IGoodsService goodsService,
-        IStoreService storeService
+        IStoreService storeService,
+        IStoreCollectionStoreService storeCollectionStoreService
     ) {
         this.flowTaskService = flowTaskService;
         this.flowTaskStoreService = flowTaskStoreService;
@@ -52,6 +59,7 @@ public class FlowGenerationService {
         this.retailOutboundService = retailOutboundService;
         this.goodsService = goodsService;
         this.storeService = storeService;
+        this.storeCollectionStoreService = storeCollectionStoreService;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -66,9 +74,12 @@ public class FlowGenerationService {
         if (goods == null) {
             return ResData.fail("货品ID不存在");
         }
-        List<Store> stores = loadStores(params.getStoreIds());
+        if (hasStoreCollection(params) && storeCollectionIds(params).isEmpty()) {
+            return ResData.fail("请选择门店集合");
+        }
+        List<Store> stores = loadStores(params);
         if (stores.isEmpty()) {
-            return ResData.fail("没有可配送的门店");
+            return hasStoreCollection(params) ? ResData.fail("所选门店集合中没有可配送的门店") : ResData.fail("没有可配送的门店");
         }
 
         FlowTask task = new FlowTask();
@@ -81,7 +92,7 @@ public class FlowGenerationService {
         task.setRetailDays(params.getRetailDays());
         task.setBatchNo(params.getBatchNo());
         task.setExpiryDate(params.getExpiryDate());
-        task.setStoreScopeType(CollectionUtils.isEmpty(params.getStoreIds()) ? "ALL" : "SELECTED");
+        task.setStoreScopeType(resolveStoreScopeType(params));
         task.setStatus("GENERATED");
         task.setGeneratedAt(System.currentTimeMillis());
         flowTaskService.save(task);
@@ -164,7 +175,50 @@ public class FlowGenerationService {
         return Integer.parseInt(taskNo.substring(2));
     }
 
-    private List<Store> loadStores(List<String> storeIds) {
+    private String resolveStoreScopeType(FlowTaskModifyParams params) {
+        if (hasStoreCollection(params)) {
+            return "COLLECTION";
+        }
+        return CollectionUtils.isEmpty(params.getStoreIds()) ? "ALL" : "SELECTED";
+    }
+
+    private List<Store> loadStores(FlowTaskModifyParams params) {
+        if (hasStoreCollection(params)) {
+            List<String> collectionIds = storeCollectionIds(params);
+            List<String> storeIds = storeCollectionStoreService.list(Wrappers.<StoreCollectionStore>lambdaQuery()
+                    .eq(StoreCollectionStore::getDeleted, false)
+                    .in(StoreCollectionStore::getCollectionId, collectionIds)
+                    .orderByAsc(StoreCollectionStore::getStoreId))
+                .stream()
+                .map(StoreCollectionStore::getStoreId)
+                .distinct()
+                .collect(Collectors.toList());
+            if (storeIds.isEmpty()) {
+                return Collections.emptyList();
+            }
+            return loadStoresByIds(storeIds);
+        }
+        return loadStoresByIds(params.getStoreIds());
+    }
+
+    private boolean hasStoreCollection(FlowTaskModifyParams params) {
+        return StringUtils.hasText(params.getStoreCollectionId()) || !storeCollectionIds(params).isEmpty();
+    }
+
+    private List<String> storeCollectionIds(FlowTaskModifyParams params) {
+        if (!CollectionUtils.isEmpty(params.getStoreCollectionIds())) {
+            return params.getStoreCollectionIds().stream()
+                .filter(StringUtils::hasText)
+                .distinct()
+                .collect(Collectors.toList());
+        }
+        if (!StringUtils.hasText(params.getStoreCollectionId())) {
+            return Collections.emptyList();
+        }
+        return List.of(params.getStoreCollectionId());
+    }
+
+    private List<Store> loadStoresByIds(List<String> storeIds) {
         if (CollectionUtils.isEmpty(storeIds)) {
             return storeService.list(Wrappers.<Store>lambdaQuery()
                 .eq(Store::getDeleted, false)
@@ -205,8 +259,8 @@ public class FlowGenerationService {
         Collections.shuffle(result);
 
         int average = Math.max(1, (int) Math.round(total * 1.0 / buckets));
-        int lower = total >= buckets ? Math.max(1, (int) Math.floor(average * 0.85)) : 0;
-        int upper = Math.max(lower, (int) Math.ceil(average * 1.15));
+        int lower = total >= buckets ? Math.max(1, (int) Math.floor(average * (1 - RANDOM_FLUCTUATION_RATE))) : 0;
+        int upper = Math.max(lower, (int) Math.ceil(average * (1 + RANDOM_FLUCTUATION_RATE)));
         int turns = Math.max(1, buckets / 2);
         for (int i = 0; i < turns; i++) {
             int from = ThreadLocalRandom.current().nextInt(buckets);

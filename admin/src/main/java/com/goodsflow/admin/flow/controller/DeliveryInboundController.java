@@ -150,7 +150,7 @@ public class DeliveryInboundController {
         Map<String, DeliveryInbound> inboundMap = buildInboundMap(inboundRows, retailRows);
         List<ExportRow> rows = buildExportRows(inboundRows, retailRows, inboundMap);
         try (Workbook workbook = new XSSFWorkbook()) {
-            Sheet sheet = workbook.createSheet("Sheet1");
+            Sheet sheet = workbook.createSheet("配送数据");
             BaseDataExcelUtils.writeHeader(workbook, sheet, excludeBatchNo ? EXPORT_HEADERS_WITHOUT_BATCH_NO : EXPORT_HEADERS);
             for (int i = 0; i < rows.size(); i++) {
                 ExportRow item = rows.get(i);

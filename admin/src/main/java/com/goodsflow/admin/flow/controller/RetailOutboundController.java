@@ -107,7 +107,7 @@ public class RetailOutboundController {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", BaseDataExcelUtils.contentDisposition(filename));
         try (Workbook workbook = new XSSFWorkbook()) {
-            Sheet sheet = workbook.createSheet("出入库明细查询视图");
+            Sheet sheet = workbook.createSheet("纯销数据");
             BaseDataExcelUtils.writeHeader(workbook, sheet, excludeBatchNo ? EXPORT_HEADERS_WITHOUT_BATCH_NO : EXPORT_HEADERS);
             for (int i = 0; i < rows.size(); i++) {
                 RetailOutbound item = rows.get(i);
