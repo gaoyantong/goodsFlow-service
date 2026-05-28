@@ -142,9 +142,13 @@ public class FlowGenerationService {
             List<Integer> dailyQuantities = distributeAroundAverage(inbound.getInboundQty(), params.getRetailDays());
             for (int dayIndex = 0; dayIndex < dailyQuantities.size(); dayIndex++) {
                 int remainingDailyQty = dailyQuantities.get(dayIndex);
-                LocalDate businessDate = inbound.getBusinessDate().plusDays(dayIndex);
+                // 零售只能从对应入库业务日期的第二天开始生成。
+                LocalDate businessDate = inbound.getBusinessDate().plusDays(dayIndex + 1L);
                 while (remainingDailyQty > 0) {
-                    int outboundQty = Math.min(remainingDailyQty, params.getMaxRetailQtyPerOrder());
+                    int outboundQty = ThreadLocalRandom.current().nextInt(
+                        1,
+                        Math.min(remainingDailyQty, params.getMaxRetailQtyPerOrder()) + 1
+                    );
                     retailList.add(createRetail(task, inbound, businessDate, outboundQty));
                     remainingDailyQty -= outboundQty;
                 }
